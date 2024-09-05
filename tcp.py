@@ -73,7 +73,27 @@ class Conexao:
         # TODO: trate aqui o recebimento de segmentos provenientes da camada de rede.
         # Chame self.callback(self, dados) para passar dados para a camada de aplicação após
         # garantir que eles não sejam duplicados e que tenham sido recebidos em ordem.
-        print('recebido payload: %r' % payload)
+
+        # Verificar duplicação
+        if seq_no <= self.seq_number_server:
+            # Segmento duplicado, ignorar
+            return
+
+        # Verificar ordem
+        if seq_no != self.seq_number_server + 1:
+            # Segmento fora de ordem, aguardar segmentos anteriores
+            return
+
+        # Enviar o payload para a camada de aplicação
+        self.callback(self, payload)
+        self.seq_number_server += len(payload)  # Atualizar o número de sequência do último segmento recebido
+
+        # Segmento recebido corretamente, enviar ACK vazio
+        ack_segment = make_header(self.id_conexao[3], self.id_conexao[1], ack_no, self.seq_number_server + 1, flags | FLAGS_ACK)
+        packed_header = fix_checksum(ack_segment, self.id_conexao[2], self.id_conexao[0])
+        self.servidor.rede.enviar(packed_header, self.id_conexao[0])
+
+        # print('recebido payload: %r' % payload)
 
     # Os métodos abaixo fazem parte da API
 
