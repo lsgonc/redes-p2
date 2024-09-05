@@ -1,4 +1,5 @@
 import asyncio
+from os import urandom
 from tcputils import *
 
 
@@ -34,9 +35,16 @@ class Servidor:
         if (flags & FLAGS_SYN) == FLAGS_SYN:
             # A flag SYN estar setada significa que é um cliente tentando estabelecer uma conexão nova
             # TODO: talvez você precise passar mais coisas para o construtor de conexão
-            conexao = self.conexoes[id_conexao] = Conexao(self, id_conexao)
+            seq_number_bytes = urandom(4)
+            seq_number = int.from_bytes(seq_number_bytes, byteorder='big')
+            conexao = self.conexoes[id_conexao] = Conexao(self, id_conexao, seq_no, ack_no)
+
             # TODO: você precisa fazer o handshake aceitando a conexão. Escolha se você acha melhor
             # fazer aqui mesmo ou dentro da classe Conexao.
+            header = make_header(dst_port, src_port, seq_number, seq_no + 1, FLAGS_SYN | FLAGS_ACK)
+            packed_header = fix_checksum(header, dst_addr, src_addr)
+            self.rede.enviar(packed_header, src_addr)
+
             if self.callback:
                 self.callback(conexao)
         elif id_conexao in self.conexoes:
@@ -48,9 +56,11 @@ class Servidor:
 
 
 class Conexao:
-    def __init__(self, servidor, id_conexao):
+    def __init__(self, servidor, id_conexao, seq_number_server, ack_number):
         self.servidor = servidor
         self.id_conexao = id_conexao
+        self.seq_number_server = seq_number_server
+        self.ack_number = ack_number
         self.callback = None
         self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
         #self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
